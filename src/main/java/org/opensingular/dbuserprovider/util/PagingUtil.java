@@ -1,21 +1,17 @@
 package org.opensingular.dbuserprovider.util;
 
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.pagination.LimitHandler;
-import org.hibernate.engine.spi.RowSelection;
-import org.opensingular.dbuserprovider.DBUserStorageException;
 import org.opensingular.dbuserprovider.persistence.RDBMS;
 
-import java.sql.SQLException;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+/**
+ * Utilitário de paginação implementado sem dependência do Hibernate.
+ *
+ * As versões anteriores deste projeto utilizavam {@code org.hibernate.dialect.Dialect}
+ * e {@code org.hibernate.engine.spi.RowSelection} para gerar a porção de
+ * paginação da query, mas essas APIs foram removidas/alteradas no Hibernate 6
+ * (utilizado pelo Keycloak 26). Portanto, agora geramos as cláusulas de
+ * paginação manualmente por RDBMS.
+ */
 public class PagingUtil {
-
-    @SuppressWarnings("RegExpRedundantEscape")
-    private static final Pattern SINGLE_QUESTION_MARK_REGEX = Pattern.compile("(^|[^\\?])(\\?)([^\\?]|$)");
-
 
     public static class Pageable {
         private final int firstResult;
@@ -25,50 +21,62 @@ public class PagingUtil {
             this.firstResult = firstResult;
             this.maxResults = maxResults;
         }
-    }
 
-    public static String formatScriptWithPageable(String query, Pageable pageable, RDBMS RDBMS) {
+        public int getFirstResult() {
+            return firstResult;
+        }
 
-        final Dialect dialect = RDBMS.getDialect();
-
-        RowSelection rowSelection = new RowSelection();
-        rowSelection.setFetchSize(pageable.maxResults);
-        rowSelection.setFirstRow(pageable.firstResult);
-        rowSelection.setMaxRows(pageable.maxResults);
-
-        String escapedSQL = escapeQuestionMarks(query);
-
-        StringBuilder processedSQL;
-        try {
-            LimitHandler limitHandler = dialect.getLimitHandler();
-            processedSQL = new StringBuilder(limitHandler.processSql(escapedSQL, rowSelection));
-            int                                 col       = 1;
-            PreparedStatementParameterCollector collector = new PreparedStatementParameterCollector();
-            col += limitHandler.bindLimitParametersAtStartOfQuery(rowSelection, collector, col);
-            limitHandler.bindLimitParametersAtEndOfQuery(rowSelection, collector, col);
-
-            Map<Integer, Object> parameters = collector.getParameters();
-            for (int i = 1; i <= parameters.keySet().size(); i++) {
-                Matcher matcher = SINGLE_QUESTION_MARK_REGEX.matcher(processedSQL);
-                if (matcher.find()) {
-                    String str = String.valueOf(parameters.get(i));
-                    processedSQL.replace(matcher.start(2), matcher.end(2), str);
-                }
-            }
-            return unescapeQuestionMarks(processedSQL.toString());
-
-        } catch (SQLException e) {
-            throw new DBUserStorageException(e.getMessage(), e);
+        public int getMaxResults() {
+            return maxResults;
         }
     }
 
+    /**
+     * Anexa a cláusula de paginação adequada ao RDBMS no final da query.
+     */
+    public static String formatScriptWithPageable(String query, Pageable pageable, RDBMS rdbms) {
+        if (pageable == null) {
+            return query;
+        }
 
-    private static String unescapeQuestionMarks(String sql) {
-        return sql.replaceAll("\\?\\?", "?");
+        int first = Math.max(pageable.getFirstResult(), 0);
+        int max = pageable.getMaxResults();
+        if (max <= 0) {
+            return query;
+        }
+
+        // Remove ; final, se houver, antes de anexar paginação
+        String base = query.trim();
+        if (base.endsWith(";")) {
+            base = base.substring(0, base.length() - 1);
+        }
+
+        if (rdbms == null) {
+            // Fallback: padrão ANSI SQL
+            return base + " OFFSET " + first + " ROWS FETCH NEXT " + max + " ROWS ONLY";
+        }
+
+        switch (rdbms) {
+            case POSTGRESQL:
+            case MYSQL:
+                return base + " LIMIT " + max + " OFFSET " + first;
+            case ORACLE:
+                // Oracle 12c+ suporta OFFSET ... FETCH
+                return base + " OFFSET " + first + " ROWS FETCH NEXT " + max + " ROWS ONLY";
+            case IBMDB2:
+                // DB2 LUW recente suporta OFFSET ... FETCH
+                return base + " OFFSET " + first + " ROWS FETCH NEXT " + max + " ROWS ONLY";
+            case SQL_SERVER:
+            case SQL_SERVER_JTDS:
+                // SQL Server 2012+ suporta OFFSET ... FETCH, mas requer ORDER BY na query.
+                // Caso a query do usuário não tenha ORDER BY, adicionamos um fallback usando a coluna 1.
+                String upper = base.toUpperCase();
+                if (!upper.contains(" ORDER BY ")) {
+                    base = base + " ORDER BY 1";
+                }
+                return base + " OFFSET " + first + " ROWS FETCH NEXT " + max + " ROWS ONLY";
+            default:
+                return base + " OFFSET " + first + " ROWS FETCH NEXT " + max + " ROWS ONLY";
+        }
     }
-
-    private static String escapeQuestionMarks(String sql) {
-        return sql.replaceAll("\\?", "??");
-    }
-
 }

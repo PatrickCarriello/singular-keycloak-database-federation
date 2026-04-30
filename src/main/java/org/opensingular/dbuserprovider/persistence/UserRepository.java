@@ -43,11 +43,24 @@ public class UserRepository {
                 if (pageable != null) {
                     query = PagingUtil.formatScriptWithPageable(query, pageable, queryConfigurations.getRDBMS());
                 }
-                log.infov("Query: {0} params: {1} ", query, Arrays.toString(params));
+                // Conveniencia: se a query tem N placeholders '?' mas o usuario
+                // passou apenas 1 parametro (caso tipico do "search" para
+                // findBySearchTerm/getCount, em que a mesma string e procurada
+                // em varias colunas como username/email/fullName), replicamos
+                // esse parametro N vezes automaticamente.
+                Object[] effectiveParams = params;
+                if (params != null && params.length == 1) {
+                    int placeholders = countPlaceholders(query);
+                    if (placeholders > 1) {
+                        effectiveParams = new Object[placeholders];
+                        Arrays.fill(effectiveParams, params[0]);
+                    }
+                }
+                log.infov("Query: {0} params: {1} ", query, Arrays.toString(effectiveParams));
                 try (PreparedStatement statement = c.prepareStatement(query)) {
-                    if (params != null) {
-                        for (int i = 1; i <= params.length; i++) {
-                            statement.setObject(i, params[i - 1]);
+                    if (effectiveParams != null) {
+                        for (int i = 1; i <= effectiveParams.length; i++) {
+                            statement.setObject(i, effectiveParams[i - 1]);
                         }
                     }
                     try (ResultSet rs = statement.executeQuery()) {
@@ -60,6 +73,28 @@ public class UserRepository {
             return null;
         }
         return null;
+    }
+
+    /**
+     * Conta o numero de placeholders '?' em uma query SQL, ignorando os que
+     * aparecem dentro de strings literais (delimitadas por aspas simples).
+     */
+    private static int countPlaceholders(String sql) {
+        int count = 0;
+        boolean inString = false;
+        for (int i = 0; i < sql.length(); i++) {
+            char ch = sql.charAt(i);
+            if (ch == '\'') {
+                if (inString && i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+                    i++;
+                    continue;
+                }
+                inString = !inString;
+            } else if (ch == '?' && !inString) {
+                count++;
+            }
+        }
+        return count;
     }
     
     private List<Map<String, String>> readMap(ResultSet rs) {
@@ -117,7 +152,7 @@ public class UserRepository {
             return Optional.ofNullable(doQuery(queryConfigurations.getCount(), null, this::readInt)).orElse(0);
         } else {
             String query = String.format("select count(*) from (%s) count", queryConfigurations.getFindBySearchTerm());
-            return Optional.ofNullable(doQuery(query, null, this::readInt, search)).orElse(0);
+            return Optional.ofNullable(doQuery(query, null, this::readInt, formatSearchTerm(search))).orElse(0);
         }
     }
     
@@ -138,7 +173,24 @@ public class UserRepository {
         if (search == null || search.isEmpty()) {
             return doQuery(queryConfigurations.getListAll(), pageable, this::readMap);
         }
-        return doQuery(queryConfigurations.getFindBySearchTerm(), pageable, this::readMap, search);
+        return doQuery(queryConfigurations.getFindBySearchTerm(), pageable, this::readMap, formatSearchTerm(search));
+    }
+
+    /**
+     * Formata o termo de busca para casar com o padrao "upper(col) like (?)"
+     * usado nas queries default. Adiciona % nas pontas se ainda nao houver e
+     * coloca tudo em maiusculo para casar com o UPPER da coluna.
+     *
+     * Se o usuario ja inseriu % no termo manualmente, respeitamos e so
+     * aplicamos o uppercase.
+     */
+    private static String formatSearchTerm(String search) {
+        if (search == null) return null;
+        String s = search.toUpperCase();
+        if (!s.contains("%")) {
+            s = "%" + s + "%";
+        }
+        return s;
     }
     
     public boolean validateCredentials(String username, String password) {

@@ -8,6 +8,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.storage.StorageId;
 import org.keycloak.storage.adapter.AbstractUserAdapterFederatedStorage;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,25 +23,34 @@ public class UserAdapter extends AbstractUserAdapterFederatedStorage {
     private final String keycloakId;
     private       String username;
 
-    public UserAdapter(KeycloakSession session, RealmModel realm, ComponentModel model, Map<String, String> data, boolean allowDatabaseToOverwriteKeycloak) {
+    public UserAdapter(KeycloakSession session, RealmModel realm, ComponentModel model,
+                       Map<String, String> data, boolean allowDatabaseToOverwriteKeycloak) {
         super(session, realm, model);
         this.keycloakId = StorageId.keycloakId(model, data.get("id"));
         this.username = data.get("username");
         try {
-          Map<String, List<String>> attributes = this.getAttributes();
-          for (Entry<String, String> e : data.entrySet()) {
-              Set<String>  newValues = new HashSet<>();
-              if (!allowDatabaseToOverwriteKeycloak) {
-                List<String> attribute = attributes.get(e.getKey());
-                if (attribute != null) {
-                    newValues.addAll(attribute);
+            // No Keycloak 26, getAttributes() de AbstractUserAdapterFederatedStorage continua
+            // retornando um Map<String, List<String>>.
+            Map<String, List<String>> attributes = this.getAttributes();
+            for (Entry<String, String> e : data.entrySet()) {
+                Set<String> newValues = new HashSet<>();
+                if (!allowDatabaseToOverwriteKeycloak) {
+                    List<String> attribute = attributes.get(e.getKey());
+                    if (attribute != null) {
+                        newValues.addAll(attribute);
+                    }
                 }
-              }
-              newValues.add(StringUtils.trimToNull(e.getValue()));
-              this.setAttribute(e.getKey(), newValues.stream().filter(Objects::nonNull).collect(Collectors.toList()));
-          }
-        } catch(Exception e) {
-          log.errorv(e, "UserAdapter constructor, username={0}", this.username);
+                String trimmed = StringUtils.trimToNull(e.getValue());
+                if (trimmed != null) {
+                    newValues.add(trimmed);
+                }
+                List<String> finalValues = newValues.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toCollection(ArrayList::new));
+                this.setAttribute(e.getKey(), finalValues);
+            }
+        } catch (Exception e) {
+            log.errorv(e, "UserAdapter constructor, username={0}", this.username);
         }
     }
 
@@ -59,6 +69,5 @@ public class UserAdapter extends AbstractUserAdapterFederatedStorage {
     public void setUsername(String username) {
         this.username = username;
     }
-
 
 }

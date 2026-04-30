@@ -1,0 +1,45 @@
+version: "3.9"
+
+# =============================================================================
+# Stack de teste: Keycloak 26 (com plugin) + PostgreSQL com tabela "users"
+# de exemplo. Util para validar o federation provider de ponta a ponta.
+# =============================================================================
+#
+# Uso:
+#   docker compose up --build
+#
+# Acesse:
+#   http://localhost:8080 (admin/admin)
+#
+# Em "User Federation -> Add provider -> singular-db-user-provider", use:
+#   JDBC URL: jdbc:postgresql://userdb:5432/userdb
+#   User:     userdb
+#   Password: userdb
+#   RDBMS:    PostgreSQL
+#
+# Senhas dos usuarios de exemplo: "secret123" (BCrypt) e "secret456" (SHA-256)
+# Veja init.sql no diretorio docker-compose/
+#
+services:
+  userdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: userdb
+      POSTGRES_PASSWORD: userdb
+      POSTGRES_DB: userdb
+    volumes:
+      - ./docker-compose/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+
+  keycloak:
+    build: .
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: dev-mem
+    ports:
+      - "8080:8080"
+    depends_on:
+      - userdb
+    command: ["start-dev"]

@@ -1,6 +1,5 @@
 package org.opensingular.dbuserprovider;
 
-import com.google.auto.service.AutoService;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
 import org.keycloak.component.ComponentModel;
@@ -19,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 
 @JBossLog
-@AutoService(UserStorageProviderFactory.class)
 public class DBUserStorageProviderFactory implements UserStorageProviderFactory<DBUserStorageProvider> {
     
     private static final String PARAMETER_PLACEHOLDER_HELP = "Use '?' as parameter placeholder character (replaced only once). ";
