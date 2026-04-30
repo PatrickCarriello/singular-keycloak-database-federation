@@ -1,34 +1,35 @@
 package org.opensingular.dbuserprovider.persistence;
 
 
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.MySQL57Dialect;
-import org.hibernate.dialect.Oracle12cDialect;
-import org.hibernate.dialect.PostgreSQL10Dialect;
-import org.hibernate.dialect.SQLServer2012Dialect;
-import org.hibernate.dialect.DB2Dialect;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Enumeração dos RDBMS suportados.
+ *
+ * As referências aos Dialects do Hibernate foram removidas porque, a partir do
+ * Hibernate 6 (utilizado pelo Keycloak 26), os Dialects "versionados"
+ * (PostgreSQL10Dialect, MySQL57Dialect, Oracle12cDialect, SQLServer2012Dialect)
+ * foram removidos. Para evitar acoplamento com a API interna do Hibernate, a
+ * paginação agora é feita manualmente em {@link org.opensingular.dbuserprovider.util.PagingUtil}.
+ */
 public enum RDBMS {
-    POSTGRESQL("PostgreSQL 10+", org.postgresql.Driver.class.getName(), "SELECT 1", new PostgreSQL10Dialect()),
-    MYSQL("MySQL 5.7+", com.mysql.cj.jdbc.Driver.class.getName(), "SELECT 1", new MySQL57Dialect()),
-    ORACLE("Oracle 12+", oracle.jdbc.OracleDriver.class.getName(), "SELECT 1 FROM DUAL", new Oracle12cDialect()),
-    IBMDB2("IBM DB2", com.ibm.db2.jcc.DB2Driver.class.getName(), "select * from sysibm.sysdummy1", new DB2Dialect()),
-    SQL_SERVER("MS SQL Server 2012+ (jtds)", net.sourceforge.jtds.jdbc.Driver.class.getName(), "SELECT 1", new SQLServer2012Dialect());
+    POSTGRESQL("PostgreSQL", "org.postgresql.Driver", "SELECT 1"),
+    MYSQL("MySQL", "com.mysql.cj.jdbc.Driver", "SELECT 1"),
+    ORACLE("Oracle", "oracle.jdbc.OracleDriver", "SELECT 1 FROM DUAL"),
+    IBMDB2("IBM DB2", "com.ibm.db2.jcc.DB2Driver", "select * from sysibm.sysdummy1"),
+    SQL_SERVER_JTDS("MS SQL Server (jtds)", "net.sourceforge.jtds.jdbc.Driver", "SELECT 1"),
+    SQL_SERVER("MS SQL Server (microsoft)", "com.microsoft.sqlserver.jdbc.SQLServerDriver", "SELECT 1");
 
-    private final String  desc;
-    private final String  driver;
-    private final String  testString;
-    private final Dialect dialect;
+    private final String desc;
+    private final String driver;
+    private final String testString;
 
-    RDBMS(String desc, String driver, String testString, Dialect dialect) {
+    RDBMS(String desc, String driver, String testString) {
         this.desc = desc;
         this.driver = driver;
         this.testString = testString;
-        this.dialect = dialect;
     }
 
     public static RDBMS getByDescription(String desc) {
@@ -38,10 +39,6 @@ public enum RDBMS {
             }
         }
         return null;
-    }
-
-    public Dialect getDialect() {
-        return dialect;
     }
 
     public static List<String> getAllDescriptions() {
@@ -59,6 +56,4 @@ public enum RDBMS {
     public String getTestString() {
         return testString;
     }
-
-
 }

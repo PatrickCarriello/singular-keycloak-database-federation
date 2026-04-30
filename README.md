@@ -1,87 +1,94 @@
-> ⚠️ **IMPORTANT:** This repository is not currently maintained. You're welcome to fork it, improve it, and use it as you wish.
+# singular-keycloak-database-federation (port para Keycloak 26)
 
-# singular-keycloak-database-federation
+Port do plugin original `opensingular/singular-keycloak-database-federation` para o **Keycloak 26**, seguindo a abordagem recomendada pela [documentacao oficial do Keycloak para User Storage SPI](https://www.keycloak.org/docs/latest/server_development/index.html#_user-storage-spi).
 
+## Arquitetura do build
 
+Conforme a documentacao oficial, providers do Keycloak 26 sao deployados como JARs simples em `/opt/keycloak/providers/`. Nao usamos fat-jar (shade). O build gera, em `dist/`:
 
-### Compatible with Keycloak 17+ quarkus based.
+- `singular-user-storage-provider.jar` - o provider em si (so as classes do plugin)
+- HikariCP, BCrypt, drivers JDBC (PostgreSQL, MySQL, Oracle, jtds), commons-codec, commons-io, commons-lang3 - como JARs separados
 
-### ** Keycloak 19+ ** KNOWN ISSUE:
+Todos eles sao copiados juntos para `/opt/keycloak/providers/`. O Keycloak os carrega via classloader plano.
 
-#### New Theme breaks custom providers, to overcome this problem, follow these steps:
+## Mudancas em relacao ao Keycloak 17
 
+| Item | Antes | Agora |
+| --- | --- | --- |
+| Java | 1.8 | 17 |
+| Keycloak SPI | 17.0.1 | 26.0.5 |
+| `UserLookupProvider` | `getUserById(String, RealmModel)` | `getUserById(RealmModel, String)` |
+| `UserQueryProvider` | retornava `List<UserModel>` | retorna `Stream<UserModel>` |
+| Hibernate Dialects | usados em `RDBMS`/`PagingUtil` | removidos (extintos no Hibernate 6) |
+| Drivers JDBC | mysql-connector-java 8.0.12, ojdbc8 | mysql-connector-j 8.4.0, ojdbc11 |
+| HikariCP | 4.0.3 | 5.1.0 |
 
- - Click "Realm Settings" on the left menu
- - Then click the tab "Themes"
- - And, for the selection input labeled "Admin console theme", select "keycloak"
- - Logoff and login again
- - Now, if you try to configure this provider again, keycloak should render all configuration fields and everything else should work fine.
- 
- See issue #19 for further information.
+## Pre-requisitos
 
+- JDK 17+
+- Maven 3.8+
 
+## Como compilar
 
-**For older versions look at older_versions branch.
+```bash
+mvn clean package
+```
 
+Resultado em `dist/`: o JAR do provider mais ~10 JARs de dependencias runtime.
 
-Keycloak User Storage SPI for Relational Databases (Keycloak User Federation, supports postgresql, mysql, oracle and mysql).
+## Como instalar no Keycloak 26
 
-- Keycloak User federation provider with SQL
-- Keycloak User federation using existing database
-- Keycloak  database user provider
-- Keycloak MSSQL Database Integration 
-- Keycloak SQL Server Database Integration 
-- Keycloak Oracle Database Integration 
-- Keycloak Postgres Database Integration 
-- Keycloak blowfish bcrypt support
+1. Pare o Keycloak.
+2. Copie **todos** os JARs de `dist/` para `/opt/keycloak/providers/`:
 
+   ```bash
+   cp dist/*.jar /opt/keycloak/providers/
+   ```
 
+3. Rode o build do Keycloak:
 
-## Usage
+   ```bash
+   /opt/keycloak/bin/kc.sh build
+   ```
 
-    Fully compatible with Singular Studio NOCODE. See https://singular.tec.br
-    
+4. Inicie o Keycloak. Em **User Federation -> Add provider**, vai aparecer `singular-db-user-provider`.
 
-## Configuration
+## Testar com Docker
 
-Keycloak User Federation Screen Shot
+```bash
+docker build -t keycloak-singular .
+docker run --rm -p 8080:8080 \
+  -e KEYCLOAK_ADMIN=admin \
+  -e KEYCLOAK_ADMIN_PASSWORD=admin \
+  keycloak-singular start-dev
+```
 
-![Sample Screenshot](screen.png)
+Acesse http://localhost:8080 (admin/admin).
 
-There is a new configuration that allows keycloak to remove a user entry from its local database (this option has no effect on the source database). It can be useful when you need to reload user data.
-This option can be configured by the following switch:
+## Stack completa de teste (Keycloak + PostgreSQL)
 
-![Sample Screenshot](deleteuser.png)
+```bash
+docker compose up --build
+```
 
-## Limitations
+Sobe um PostgreSQL com tabela `users` de exemplo (vide `docker-compose/init.sql`) e o Keycloak ja com o provider instalado.
 
-    - Do not allow user information update, including password update
-    - Do not supports user roles our groups
+Configure no provider:
+- **JDBC URL**: `jdbc:postgresql://userdb:5432/userdb`
+- **User**: `userdb`
+- **Password**: `userdb`
+- **RDBMS**: `PostgreSQL`
 
-## Custom attributes
+## Notas tecnicas
 
-Just add a mapper to client mappers with the same name as the returned column alias in your queries.Use mapper type "User Attribute". See the example below:
-    
-![Sample Screenshot 2](screen2.png)
+### Por que `maven-compiler-plugin:3.11.0` e nao 3.13?
 
+A versao 3.12+ do compiler-plugin ativa o Java modulepath automaticamente quando detecta `module-info` em alguma dependencia (HikariCP 5+ tem). Quando o modulepath e ativado, o JAR `keycloak-server-spi-private` e silenciosamente descartado porque seu nome contem `private`, palavra reservada Java, fazendo a derivacao de Automatic-Module-Name falhar. Resultado: erros falsos de "cannot find symbol" para classes que estao comprovadamente no classpath. Fixar 3.11.0 mantem o classpath classico.
 
-## Build
+### Paginacao sem Hibernate
 
-    - mvn clean package
+O Keycloak 26 usa Hibernate 6, que removeu os Dialects versionados (`PostgreSQL10Dialect`, `MySQL57Dialect`, etc) que o codigo original usava. Reescrevi `PagingUtil` para gerar `LIMIT/OFFSET` (Postgres/MySQL) e `OFFSET ... FETCH NEXT` (Oracle 12+, DB2, SQL Server 2012+) manualmente.
 
-## Deployment
+## Licenca
 
-    1) Copy every  `.jar` from dist/ folder  to  /providers folder under your keycloak installation root. 
-        - i.e, on a default keycloak setup, copy all  `.jar` files to <keycloak_root_dir>/providers
-    2) run :
-        $ ./bin/kc.sh start-dev
-    OR if you are using a production configuration:
-        $ ./bin/kc.sh build
-        $ ./bin/kc.sh start
-
-## For futher information see:
-    - https://github.com/keycloak/keycloak/issues/9833
-    - https://www.keycloak.org/docs/latest/server_development/#packaging-and-deployment
-    
-    
-
+Apache 2.0 (mesma do projeto original).
