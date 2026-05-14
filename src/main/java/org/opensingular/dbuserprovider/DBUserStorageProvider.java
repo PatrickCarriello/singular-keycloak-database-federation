@@ -30,15 +30,15 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * Provider de Storage de Usuários adaptado para Keycloak 26.
+ * User Storage Provider adapted for Keycloak 26.
  *
- * Mudanças em relação à versão anterior:
- * - {@link UserLookupProvider}: a partir do Keycloak 19, os métodos foram renomeados para
- *   getUserById(RealmModel, String), getUserByUsername(RealmModel, String) e
- *   getUserByEmail(RealmModel, String), e o realm vem antes.
- * - {@link UserQueryProvider}: o método getUsers e várias sobrecargas foram removidas;
- *   a busca agora retorna Stream e a API consolidada é searchForUserStream(RealmModel, Map, ...).
- * - {@code getDisableableCredentialTypes} retorna {@code Stream<String>}.
+ * Changes from previous version:
+ * - {@link UserLookupProvider}: since Keycloak 19, methods were renamed to
+ *   getUserById(RealmModel, String), getUserByUsername(RealmModel, String) and
+ *   getUserByEmail(RealmModel, String), with realm as the first parameter.
+ * - {@link UserQueryProvider}: getUsers and several overloads were removed;
+ *   search now returns Stream and the consolidated API is searchForUserStream(RealmModel, Map, ...).
+ * - {@code getDisableableCredentialTypes} returns {@code Stream<String>}.
  */
 @JBossLog
 public class DBUserStorageProvider implements UserStorageProvider,
@@ -92,16 +92,15 @@ public class DBUserStorageProvider implements UserStorageProvider,
             return false;
         }
 
-        // No Keycloak 26, qualquer CredentialInput pode chegar aqui; usamos getChallengeResponse() que é parte da interface
         String challengeResponse = input.getChallengeResponse();
         if (challengeResponse == null) {
             return false;
         }
 
-        // No Keycloak 26, CachedUserModel foi movido para um módulo interno (keycloak-model-infinispan)
-        // não acessível a providers externos via Maven. A invalidação de cache quando
-        // allowDatabaseToOverwriteKeycloak está ativo é gerenciada pelo próprio Keycloak.
-        // Aqui apenas validamos a credencial diretamente contra o repositório.
+        // In Keycloak 26, CachedUserModel was moved to an internal module (keycloak-model-infinispan)
+        // not accessible to external providers via Maven. Cache invalidation when
+        // allowDatabaseToOverwriteKeycloak is active is managed by Keycloak itself.
+        // Here we only validate the credential directly against the repository.
         return repository.validateCredentials(user.getUsername(), challengeResponse);
     }
 
@@ -155,7 +154,7 @@ public class DBUserStorageProvider implements UserStorageProvider,
     }
 
     // ------------------------------------------------------------------
-    // UserLookupProvider (API Keycloak 19+)
+    // UserLookupProvider (Keycloak 19+)
     // ------------------------------------------------------------------
 
     @Override
@@ -188,7 +187,7 @@ public class DBUserStorageProvider implements UserStorageProvider,
     }
 
     // ------------------------------------------------------------------
-    // UserQueryProvider (API Keycloak 19+) – tudo Stream agora
+    // UserQueryProvider (Keycloak 19+) 
     // ------------------------------------------------------------------
 
     @Override
@@ -222,12 +221,12 @@ public class DBUserStorageProvider implements UserStorageProvider,
     }
 
     /**
-     * Pesquisa de usuários pelo Keycloak 19+. {@code params} pode conter:
-     * - "keycloak.session.realm.users.query.search" (UserModel.SEARCH) → termo de busca
-     * - "username", "email", "firstName", "lastName" → filtros específicos
+     * User search for Keycloak 19+. {@code params} may contain:
+     * - "keycloak.session.realm.users.query.search" (UserModel.SEARCH) → search term
+     * - "username", "email", "firstName", "lastName" → specific filters
      *
-     * Como nosso provider usa uma única query parametrizada, mesclamos todos esses
-     * valores em um termo de busca.
+     * Since our provider uses a single parameterized query, we merge all these
+     * values into a single search term.
      */
     @Override
     public Stream<UserModel> searchForUserStream(RealmModel realm, Map<String, String> params, Integer firstResult, Integer maxResults) {
@@ -258,7 +257,7 @@ public class DBUserStorageProvider implements UserStorageProvider,
 
     @Override
     public UserModel addUser(RealmModel realm, String username) {
-        // Conforme a documentação: "If your provider has a configuration switch to turn off
+        // According to the docs: "If your provider has a configuration switch to turn off
         // adding a user, returning null from this method will skip the provider and call the next one."
         return null;
     }
@@ -290,16 +289,16 @@ public class DBUserStorageProvider implements UserStorageProvider,
     }
 
     /**
-     * Extrai um termo de busca do mapa de parâmetros que o Keycloak passa.
+     * Extracts a search term from the parameter map passed by Keycloak.
      *
-     * Prioridade:
+     * Priority:
      *   1. UserModel.SEARCH ("keycloak.session.realm.users.query.search")
      *   2. "search"
      *   3. username
      *   4. email
      *   5. firstName
      *   6. lastName
-     *   7. qualquer primeiro valor
+     *   7. any first value
      */
     private static String extractSearch(Map<String, String> params) {
         if (params == null || params.isEmpty()) {

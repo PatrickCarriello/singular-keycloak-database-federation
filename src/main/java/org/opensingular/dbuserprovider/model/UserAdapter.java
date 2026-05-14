@@ -24,13 +24,13 @@ public class UserAdapter extends AbstractUserAdapterFederatedStorage {
     private       String username;
 
     public UserAdapter(KeycloakSession session, RealmModel realm, ComponentModel model,
-                       Map<String, String> data, boolean allowDatabaseToOverwriteKeycloak) {
+                    Map<String, String> data, boolean allowDatabaseToOverwriteKeycloak) {
         super(session, realm, model);
         this.keycloakId = StorageId.keycloakId(model, data.get("id"));
         this.username = data.get("username");
         try {
-            // No Keycloak 26, getAttributes() de AbstractUserAdapterFederatedStorage continua
-            // retornando um Map<String, List<String>>.
+            // In Keycloak 26, getAttributes() from AbstractUserAdapterFederatedStorage still
+            // returns a Map<String, List<String>>.
             Map<String, List<String>> attributes = this.getAttributes();
             for (Entry<String, String> e : data.entrySet()) {
                 Set<String> newValues = new HashSet<>();

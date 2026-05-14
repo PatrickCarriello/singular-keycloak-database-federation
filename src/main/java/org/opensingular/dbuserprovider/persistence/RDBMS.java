@@ -6,13 +6,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Enumeração dos RDBMS suportados.
+ * ENUM's of supported RDBMS.
  *
- * As referências aos Dialects do Hibernate foram removidas porque, a partir do
- * Hibernate 6 (utilizado pelo Keycloak 26), os Dialects "versionados"
+ * References to Hibernate Dialects were removed because, starting from
+ * Hibernate 6 (used by Keycloak 26), the versioned Dialects
  * (PostgreSQL10Dialect, MySQL57Dialect, Oracle12cDialect, SQLServer2012Dialect)
- * foram removidos. Para evitar acoplamento com a API interna do Hibernate, a
- * paginação agora é feita manualmente em {@link org.opensingular.dbuserprovider.util.PagingUtil}.
+ * were removed. To avoid coupling with Hibernate's internal API, pagination
+ * is now handled manually in {@link org.opensingular.dbuserprovider.util.PagingUtil}.
  */
 public enum RDBMS {
     POSTGRESQL("PostgreSQL", "org.postgresql.Driver", "SELECT 1"),

@@ -43,11 +43,10 @@ public class UserRepository {
                 if (pageable != null) {
                     query = PagingUtil.formatScriptWithPageable(query, pageable, queryConfigurations.getRDBMS());
                 }
-                // Conveniencia: se a query tem N placeholders '?' mas o usuario
-                // passou apenas 1 parametro (caso tipico do "search" para
-                // findBySearchTerm/getCount, em que a mesma string e procurada
-                // em varias colunas como username/email/fullName), replicamos
-                // esse parametro N vezes automaticamente.
+                // Convenience: if the query has N '?' placeholders but only 1 parameter was
+                // provided (typical for "search" in findBySearchTerm/getCount, where the same
+                // string is searched across multiple columns like username/email/fullName),
+                // we replicate that parameter N times automatically.
                 Object[] effectiveParams = params;
                 if (params != null && params.length == 1) {
                     int placeholders = countPlaceholders(query);
@@ -76,8 +75,8 @@ public class UserRepository {
     }
 
     /**
-     * Conta o numero de placeholders '?' em uma query SQL, ignorando os que
-     * aparecem dentro de strings literais (delimitadas por aspas simples).
+     * Counts the number of '?' placeholders in a SQL query, ignoring those
+     * that appear inside string literals (delimited by single quotes).
      */
     private static int countPlaceholders(String sql) {
         int count = 0;
@@ -177,12 +176,12 @@ public class UserRepository {
     }
 
     /**
-     * Formata o termo de busca para casar com o padrao "upper(col) like (?)"
-     * usado nas queries default. Adiciona % nas pontas se ainda nao houver e
-     * coloca tudo em maiusculo para casar com o UPPER da coluna.
+     * Formats the search term to match the "upper(col) like (?)" pattern
+     * used in default queries. Adds % on both ends if not already present and
+     * uppercases the string to match the UPPER on the column.
      *
-     * Se o usuario ja inseriu % no termo manualmente, respeitamos e so
-     * aplicamos o uppercase.
+     * If the user already included % in the term manually, it is respected and
+     * only the uppercase transformation is applied.
      */
     private static String formatSearchTerm(String search) {
         if (search == null) return null;
