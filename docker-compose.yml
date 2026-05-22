@@ -43,3 +43,10 @@ services:
     depends_on:
       - userdb
     command: ["start-dev"]
+  
+  build-plugin:
+    image: maven:3.8.3-openjdk-17
+    volumes:
+        - ./:/app/src
+        - ./dist:/app/dist
+    command: "bash -c 'cd /app/src && mvn clean package'"
